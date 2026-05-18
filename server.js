@@ -7,6 +7,7 @@ import authRoutes from './routes/authRoutes.js';
 import registrationRoutes from './routes/registrationRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
+import predefinedRoutes from './routes/predefinedRoutes.js';
 
 dotenv.config();
 
@@ -26,6 +27,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/registrations', registrationRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/predefined', predefinedRoutes);
 
 // ── Health check ───────────────────────────────────────────
 app.get('/api/health', (_, res) => res.json({ status: 'ok', service: 'CGA Reunion API' }));

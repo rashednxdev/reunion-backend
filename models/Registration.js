@@ -20,25 +20,83 @@ const registrationSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    bloodGroup: {
+      type: String,
+      required: [true, 'Blood group is required'],
+      trim: true,
+    },
+    gender: {
+      type: String,
+      required: [true, 'Gender is required'],
+      trim: true,
+    },
+    officeType: {
+      type: String,
+      required: [true, 'Office type is required'],
+      trim: true,
+    },
+    division: {
+      type: String,
+      required: [true, 'Division is required'],
+      trim: true,
+    },
     district: {
       type: String,
-      required: [true, 'District/Posting is required'],
+      required: [true, 'District is required'],
+      trim: true,
+    },
+    upazila: {
+      type: String,
+      required: [true, 'Upazila is required'],
       trim: true,
     },
     mobile: {
       type: String,
       required: [true, 'Mobile number is required'],
       trim: true,
+      unique: true, // We will enforce unique mobile numbers per registration
     },
     email: {
       type: String,
       trim: true,
       lowercase: true,
     },
-    attendance: {
+    tshirtSize: {
       type: String,
-      enum: ['yes', 'maybe', 'no'],
-      default: 'yes',
+      trim: true,
+    },
+    members: [
+      {
+        name: String,
+        gender: String,
+        relation: String,
+        ageGroup: String,
+      }
+    ],
+    totalFee: {
+      type: Number,
+      required: true,
+      default: 1200,
+    },
+    paymentMethod: {
+      type: String,
+      trim: true,
+    },
+    transactionId: {
+      type: String,
+      trim: true,
+    },
+    amountPaid: {
+      type: Number,
+    },
+    status: {
+      type: String,
+      enum: ['pending', 'approved', 'rejected'],
+      default: 'pending',
+    },
+    rejectionReason: {
+      type: String,
+      trim: true,
     },
     message: {
       type: String,
