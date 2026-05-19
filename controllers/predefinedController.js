@@ -6,7 +6,7 @@ import Upazila from '../models/Upazila.js';
 // --- Office Types ---
 export const getOfficeTypes = async (req, res) => {
   try {
-    const data = await OfficeType.find().sort({ createdAt: -1 });
+    const data = await OfficeType.find().sort({ createdAt: 1 });
     res.status(200).json({ success: true, data });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

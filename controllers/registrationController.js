@@ -212,3 +212,101 @@ export const exportCSV = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
+// GET /api/registrations/public-stats  (public)
+export const getPublicStats = async (req, res) => {
+  try {
+    const filter = { status: { $in: ['pending', 'approved'] } };
+
+    const [officeTypeStats, divisionStats, districtStats, upazilaStats] = await Promise.all([
+      Registration.aggregate([
+        { $match: filter },
+        { $group: { _id: '$officeType', count: { $sum: 1 } } },
+        { $sort: { count: -1 } }
+      ]),
+      Registration.aggregate([
+        { $match: filter },
+        { $group: { _id: '$division', count: { $sum: 1 } } },
+        { $match: { _id: { $ne: null }, count: { $gt: 0 } } },
+        { $sort: { count: -1 } }
+      ]),
+      Registration.aggregate([
+        { $match: filter },
+        { $group: { _id: '$district', count: { $sum: 1 } } },
+        { $match: { _id: { $ne: null }, count: { $gt: 0 } } },
+        { $sort: { count: -1 } }
+      ]),
+      Registration.aggregate([
+        { $match: filter },
+        { $group: { _id: '$upazila', count: { $sum: 1 } } },
+        { $match: { _id: { $ne: null }, count: { $gt: 0 } } },
+        { $sort: { count: -1 } }
+      ])
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        officeTypeStats,
+        divisionStats,
+        districtStats,
+        upazilaStats
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// POST /api/registrations/assign-serials  (admin only)
+// Bulk-assigns sequential serial numbers to ALL approved registrations that don't have one yet
+export const assignSerialNumbers = async (req, res) => {
+  try {
+    // Get all approved registrations without a serial number, oldest first
+    const unassigned = await Registration.find({
+      status: 'approved',
+      serialNumber: { $exists: false }
+    }).sort({ createdAt: 1 });
+
+    if (unassigned.length === 0) {
+      return res.json({ success: true, message: 'All approved registrations already have serial numbers.', assigned: 0 });
+    }
+
+    // Find the current highest serial number
+    const highest = await Registration.findOne({ serialNumber: { $exists: true } }).sort({ serialNumber: -1 });
+    let nextSerial = highest ? highest.serialNumber + 1 : 1001;
+
+    // Assign serials one by one
+    const updates = unassigned.map((reg, i) => ({
+      updateOne: {
+        filter: { _id: reg._id },
+        update: { $set: { serialNumber: nextSerial + i } }
+      }
+    }));
+
+    await Registration.bulkWrite(updates);
+
+    res.json({
+      success: true,
+      message: `Successfully assigned ${unassigned.length} serial numbers starting from ${nextSerial}.`,
+      assigned: unassigned.length,
+      startedFrom: nextSerial
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// GET /api/registrations/draw-candidates  (public – only reveals name, district, office, serialNumber)
+export const getDrawCandidates = async (req, res) => {
+  try {
+    const candidates = await Registration.find(
+      { status: 'approved', serialNumber: { $exists: true } },
+      { serialNumber: 1, fullName: 1, district: 1, officeType: 1 }
+    ).sort({ serialNumber: 1 });
+
+    res.json({ success: true, data: candidates });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};

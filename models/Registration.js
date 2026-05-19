@@ -42,12 +42,10 @@ const registrationSchema = new mongoose.Schema(
     },
     district: {
       type: String,
-      required: [true, 'District is required'],
       trim: true,
     },
     upazila: {
       type: String,
-      required: [true, 'Upazila is required'],
       trim: true,
     },
     mobile: {
