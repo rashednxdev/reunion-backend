@@ -19,15 +19,39 @@ const PORT = process.env.PORT || 5001;
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:3001',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:3001',
   process.env.FRONTEND_URL
 ].filter(Boolean);
 
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin) return callback(null, true);
+    
+    // Check if in static allowed list
     if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
+    
+    try {
+      const url = new URL(origin);
+      const hostname = url.hostname;
+      
+      // Allow localhost, loopback, and local network IPs (e.g. 192.168.x.x, 10.x.x.x, 172.x.x.x)
+      if (
+        hostname === 'localhost' ||
+        hostname === '127.0.0.1' ||
+        hostname === '[::1]' ||
+        hostname.startsWith('192.168.') ||
+        hostname.startsWith('10.') ||
+        hostname.startsWith('172.')
+      ) {
+        return callback(null, true);
+      }
+    } catch (e) {
+      // URL parsing failed
+    }
+
     return callback(new Error(`Origin ${origin} not allowed by CORS`));
   },
   credentials: true,

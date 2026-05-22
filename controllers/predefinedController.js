@@ -2,6 +2,7 @@ import OfficeType from '../models/OfficeType.js';
 import Division from '../models/Division.js';
 import District from '../models/District.js';
 import Upazila from '../models/Upazila.js';
+import OfficeName from '../models/OfficeName.js';
 
 // --- Office Types ---
 export const getOfficeTypes = async (req, res) => {
@@ -129,5 +130,47 @@ export const deleteUpazila = async (req, res) => {
     res.status(200).json({ success: true, message: 'Deleted successfully' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// --- Office Names (DCA / DAFO / UAO) ---
+export const getOfficeNames = async (req, res) => {
+  try {
+    const { type } = req.query;
+    const filter = type ? { officeTypeKey: type.toUpperCase() } : {};
+    const data = await OfficeName.find(filter)
+      .populate('divisionId', 'title short')
+      .populate('districtId', 'title short')
+      .populate('upazilaId', 'title short')
+      .sort({ officeTypeKey: 1, title: 1 });
+    res.json({ success: true, data });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+export const createOfficeName = async (req, res) => {
+  try {
+    const { title, short, officeTypeKey, divisionId, districtId, upazilaId } = req.body;
+    if (!officeTypeKey || (officeTypeKey !== 'CAFO' && !divisionId)) {
+      return res.status(400).json({ success: false, message: 'officeTypeKey and divisionId are required' });
+    }
+    const doc = await OfficeName.create({ title, short, officeTypeKey, divisionId: divisionId || undefined, districtId, upazilaId });
+    const populated = await OfficeName.findById(doc._id)
+      .populate('divisionId', 'title short')
+      .populate('districtId', 'title short')
+      .populate('upazilaId', 'title short');
+    res.status(201).json({ success: true, data: populated });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+export const deleteOfficeName = async (req, res) => {
+  try {
+    await OfficeName.findByIdAndDelete(req.params.id);
+    res.json({ success: true, message: 'Deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
 };

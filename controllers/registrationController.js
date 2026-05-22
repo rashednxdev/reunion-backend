@@ -1,4 +1,5 @@
 import Registration from '../models/Registration.js';
+import UserOffice from '../models/UserOffice.js';
 
 // Generate ticket ID: CGA2018-XXXXXX (6 char alphanumeric)
 const generateTicketId = () => {
@@ -13,7 +14,7 @@ const generateTicketId = () => {
 // POST /api/registrations
 export const createRegistration = async (req, res) => {
   try {
-    const { name, fullName, phone, mobile, employeeId, designation, bloodGroup, gender, officeType, division, district, upazila, email, message, members = [], paymentMethod, transactionId, amountPaid, tshirtSize } = req.body;
+    const { name, fullName, phone, mobile, employeeId, designation, bloodGroup, gender, officeType, division, district, upazila, email, message, members = [], paymentMethod, transactionId, amountPaid, tshirtSize, officeName } = req.body;
 
     const finalName = fullName || name;
     const finalMobile = mobile || phone;
@@ -31,11 +32,7 @@ export const createRegistration = async (req, res) => {
     // Calculate Fee
     let calculatedFee = 1200; // Base fee
     if (Array.isArray(members)) {
-      members.forEach(member => {
-        if (member.ageGroup && member.ageGroup !== 'Below 6') {
-          calculatedFee += 600;
-        }
-      });
+      calculatedFee += members.length * 600;
     }
 
     // Generate unique ticket ID
@@ -47,6 +44,20 @@ export const createRegistration = async (req, res) => {
       if (!existing) isUnique = true;
     }
 
+    // Compute unified office name
+    let computedOfficeName = officeType || '';
+    if (officeType === 'Office of the Controller General of Accounts' || officeType === 'CGA') {
+      computedOfficeName = 'CGA';
+    } else if (officeType === 'Chief Accounts and Finance Office' || officeType === 'CAFO') {
+      computedOfficeName = officeName || district || 'CAFO';
+    } else if (officeType === 'Divisional Controller General of Accounts' || officeType === 'DCA') {
+      computedOfficeName = `DCA - ${division || ''}`;
+    } else if (officeType === 'District Accounts and Finance Office' || officeType === 'DAFO') {
+      computedOfficeName = `DAFO - ${district || ''}`;
+    } else if (officeType === 'Upazila Accounts Office' || officeType === 'UAO') {
+      computedOfficeName = `UAO - ${upazila || ''}`;
+    }
+
     const registration = await Registration.create({
       ticketId,
       fullName: finalName,
@@ -55,6 +66,7 @@ export const createRegistration = async (req, res) => {
       bloodGroup,
       gender,
       officeType,
+      officeName: computedOfficeName,
       division,
       district,
       upazila,
@@ -69,6 +81,22 @@ export const createRegistration = async (req, res) => {
       amountPaid: Number(amountPaid) || calculatedFee,
       status: 'pending' // default
     });
+
+    // Create UserOffice tracking entry
+    try {
+      await UserOffice.create({
+        registrationId: registration._id,
+        fullName: finalName,
+        mobile: finalMobile,
+        officeType,
+        officeName: computedOfficeName,
+        division: division || 'N/A',
+        district: district || 'N/A',
+        upazila: upazila || 'N/A',
+      });
+    } catch (err) {
+      console.error('Failed to create UserOffice entry:', err);
+    }
 
     res.status(201).json({ success: true, data: registration, registration });
   } catch (err) {
@@ -180,7 +208,7 @@ export const exportCSV = async (req, res) => {
   try {
     const registrations = await Registration.find().sort({ createdAt: -1 });
 
-    const headers = ['Name', 'Employee ID', 'Designation', 'Blood Group', 'Gender', 'Office Type', 'Division', 'District', 'Upazila', 'Phone', 'Email', 'Status', 'Total Fee', 'Payment Method', 'TrxID', 'Members Count', 'Ticket ID', 'Registered At'];
+    const headers = ['Name', 'Employee ID', 'Designation', 'Blood Group', 'Gender', 'Office Type', 'Office Name', 'Division', 'District', 'Upazila', 'Phone', 'Email', 'Status', 'Total Fee', 'Payment Method', 'TrxID', 'Members Count', 'Ticket ID', 'Registered At'];
     const rows = registrations.map((r) => [
       r.fullName,
       r.employeeId || '',
@@ -188,6 +216,7 @@ export const exportCSV = async (req, res) => {
       r.bloodGroup || '',
       r.gender || '',
       r.officeType || '',
+      r.officeName || '',
       r.division || '',
       r.district || '',
       r.upazila || '',
@@ -218,39 +247,67 @@ export const getPublicStats = async (req, res) => {
   try {
     const filter = { status: { $in: ['pending', 'approved'] } };
 
-    const [officeTypeStats, divisionStats, districtStats, upazilaStats] = await Promise.all([
-      Registration.aggregate([
-        { $match: filter },
-        { $group: { _id: '$officeType', count: { $sum: 1 } } },
-        { $sort: { count: -1 } }
-      ]),
-      Registration.aggregate([
-        { $match: filter },
-        { $group: { _id: '$division', count: { $sum: 1 } } },
-        { $match: { _id: { $ne: null }, count: { $gt: 0 } } },
-        { $sort: { count: -1 } }
-      ]),
-      Registration.aggregate([
-        { $match: filter },
-        { $group: { _id: '$district', count: { $sum: 1 } } },
-        { $match: { _id: { $ne: null }, count: { $gt: 0 } } },
-        { $sort: { count: -1 } }
-      ]),
-      Registration.aggregate([
-        { $match: filter },
-        { $group: { _id: '$upazila', count: { $sum: 1 } } },
-        { $match: { _id: { $ne: null }, count: { $gt: 0 } } },
-        { $sort: { count: -1 } }
-      ])
+    const officeTypeStats = await Registration.aggregate([
+      { $match: filter },
+      {
+        $project: {
+          officeType: 1,
+          totalPersons: { $add: [1, { $size: { $ifNull: ['$members', []] } }] }
+        }
+      },
+      {
+        $group: {
+          _id: '$officeType',
+          count: { $sum: '$totalPersons' }
+        }
+      },
+      { $sort: { count: -1 } }
     ]);
+
+    // Query registrations to compute other stats
+    const registrations = await Registration.find(filter, { gender: 1, members: 1 });
+
+    let totalRegistrations = registrations.length;
+    let totalGuests = 0;
+
+    const userGenderCount = { Male: 0, Female: 0, Other: 0 };
+    const guestGenderCount = { Male: 0, Female: 0, Other: 0 };
+    const totalGenderCount = { Male: 0, Female: 0, Other: 0 };
+
+    registrations.forEach(r => {
+      // Standardize gender keys to start uppercase
+      let g = r.gender || 'Male';
+      g = g.charAt(0).toUpperCase() + g.slice(1).toLowerCase();
+      if (!['Male', 'Female', 'Other'].includes(g)) g = 'Other';
+
+      userGenderCount[g] = (userGenderCount[g] || 0) + 1;
+      totalGenderCount[g] = (totalGenderCount[g] || 0) + 1;
+
+      if (r.members && r.members.length > 0) {
+        r.members.forEach(m => {
+          let mg = m.gender || 'Male';
+          mg = mg.charAt(0).toUpperCase() + mg.slice(1).toLowerCase();
+          if (!['Male', 'Female', 'Other'].includes(mg)) mg = 'Other';
+
+          guestGenderCount[mg] = (guestGenderCount[mg] || 0) + 1;
+          totalGenderCount[mg] = (totalGenderCount[mg] || 0) + 1;
+          totalGuests += 1;
+        });
+      }
+    });
+
+    const formatGender = (obj) => Object.keys(obj).map(key => ({ _id: key, count: obj[key] }));
 
     res.json({
       success: true,
       data: {
         officeTypeStats,
-        divisionStats,
-        districtStats,
-        upazilaStats
+        totalRegistrations,
+        totalGuests,
+        totalAttendees: totalRegistrations + totalGuests,
+        userGenderStats: formatGender(userGenderCount),
+        guestGenderStats: formatGender(guestGenderCount),
+        totalGenderStats: formatGender(totalGenderCount)
       }
     });
   } catch (err) {
@@ -272,25 +329,57 @@ export const assignSerialNumbers = async (req, res) => {
       return res.json({ success: true, message: 'All approved registrations already have serial numbers.', assigned: 0 });
     }
 
-    // Find the current highest serial number
-    const highest = await Registration.findOne({ serialNumber: { $exists: true } }).sort({ serialNumber: -1 });
-    let nextSerial = highest ? highest.serialNumber + 1 : 1001;
+    // Find the current highest serial number for Male
+    const highestMale = await Registration.findOne({
+      gender: 'Male',
+      serialNumber: { $exists: true }
+    }).sort({ serialNumber: -1 });
+    let nextMaleSerial = highestMale ? highestMale.serialNumber + 1 : 100;
 
-    // Assign serials one by one
-    const updates = unassigned.map((reg, i) => ({
-      updateOne: {
-        filter: { _id: reg._id },
-        update: { $set: { serialNumber: nextSerial + i } }
+    // Find the current highest serial number for Female
+    const highestFemale = await Registration.findOne({
+      gender: 'Female',
+      serialNumber: { $exists: true }
+    }).sort({ serialNumber: -1 });
+    let nextFemaleSerial = highestFemale ? highestFemale.serialNumber + 1 : 600;
+
+    let assignedCount = 0;
+    const updates = [];
+
+    for (const reg of unassigned) {
+      const isFemale = (reg.gender || '').toLowerCase() === 'female';
+      let serial;
+      if (isFemale) {
+        serial = nextFemaleSerial++;
+      } else {
+        serial = nextMaleSerial++;
       }
-    }));
+
+      // Generate ticketId based on: first letter of gender + tshirt size + '-' + serial
+      const genderLetter = (reg.gender || 'Male').charAt(0).toUpperCase();
+      const tshirtSize = (reg.tshirtSize || 'M').toUpperCase();
+      const ticketId = `${genderLetter}${tshirtSize}-${serial}`;
+
+      updates.push({
+        updateOne: {
+          filter: { _id: reg._id },
+          update: { 
+            $set: { 
+              serialNumber: serial,
+              ticketId: ticketId
+            } 
+          }
+        }
+      });
+      assignedCount++;
+    }
 
     await Registration.bulkWrite(updates);
 
     res.json({
       success: true,
-      message: `Successfully assigned ${unassigned.length} serial numbers starting from ${nextSerial}.`,
-      assigned: unassigned.length,
-      startedFrom: nextSerial
+      message: `Successfully assigned ${assignedCount} serial numbers and formatted tickets.`,
+      assigned: assignedCount
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -306,6 +395,57 @@ export const getDrawCandidates = async (req, res) => {
     ).sort({ serialNumber: 1 });
 
     res.json({ success: true, data: candidates });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// POST /api/registrations/sync-user-offices (admin only)
+export const syncUserOffices = async (req, res) => {
+  try {
+    const registrations = await Registration.find();
+    let syncedCount = 0;
+
+    for (const reg of registrations) {
+      // Determine computed office name
+      let computedOfficeName = reg.officeType || '';
+      const oType = reg.officeType || '';
+
+      if (oType === 'Office of the Controller General of Accounts' || oType === 'CGA') {
+        computedOfficeName = 'CGA';
+      } else if (oType === 'Chief Accounts and Finance Office' || oType === 'CAFO') {
+        computedOfficeName = reg.officeName || reg.district || 'CAFO';
+      } else if (oType === 'Divisional Controller General of Accounts' || oType === 'DCA') {
+        computedOfficeName = `DCA - ${reg.division || ''}`;
+      } else if (oType === 'District Accounts and Finance Office' || oType === 'DAFO') {
+        computedOfficeName = `DAFO - ${reg.district || ''}`;
+      } else if (oType === 'Upazila Accounts Office' || oType === 'UAO') {
+        computedOfficeName = `UAO - ${reg.upazila || ''}`;
+      }
+
+      // Update registration document
+      reg.officeName = computedOfficeName;
+      await reg.save({ validateBeforeSave: false });
+
+      // Create or update UserOffice entry
+      await UserOffice.findOneAndUpdate(
+        { registrationId: reg._id },
+        {
+          fullName: reg.fullName,
+          mobile: reg.mobile,
+          officeType: oType,
+          officeName: computedOfficeName,
+          division: reg.division || 'N/A',
+          district: reg.district || 'N/A',
+          upazila: reg.upazila || 'N/A',
+        },
+        { upsert: true, new: true }
+      );
+
+      syncedCount++;
+    }
+
+    res.json({ success: true, message: `Successfully synced ${syncedCount} registrations with UserOffice table.`, syncedCount });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

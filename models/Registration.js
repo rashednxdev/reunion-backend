@@ -35,9 +35,12 @@ const registrationSchema = new mongoose.Schema(
       required: [true, 'Office type is required'],
       trim: true,
     },
+    officeName: {
+      type: String,
+      trim: true,
+    },
     division: {
       type: String,
-      required: [true, 'Division is required'],
       trim: true,
     },
     district: {
@@ -62,6 +65,9 @@ const registrationSchema = new mongoose.Schema(
     tshirtSize: {
       type: String,
       trim: true,
+    },
+    serialNumber: {
+      type: Number,
     },
     members: [
       {

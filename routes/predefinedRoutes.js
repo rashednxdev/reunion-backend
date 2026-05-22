@@ -12,6 +12,9 @@ import {
   getUpazilas,
   createUpazila,
   deleteUpazila,
+  getOfficeNames,
+  createOfficeName,
+  deleteOfficeName,
 } from '../controllers/predefinedController.js';
 import { adminAuth } from '../middleware/adminAuth.js';
 
@@ -44,5 +47,12 @@ router.route('/upazilas')
   .post(adminAuth, createUpazila);
 router.route('/upazilas/:id')
   .delete(adminAuth, deleteUpazila);
+
+// Office Names (DCA / DAFO / UAO)
+router.route('/office-names')
+  .get(getOfficeNames)
+  .post(adminAuth, createOfficeName);
+router.route('/office-names/:id')
+  .delete(adminAuth, deleteOfficeName);
 
 export default router;
