@@ -10,6 +10,7 @@ import aiRoutes from './routes/aiRoutes.js';
 import predefinedRoutes from './routes/predefinedRoutes.js';
 import drawRoutes from './routes/drawRoutes.js';
 import paymentMethodRoutes from './routes/paymentMethodRoutes.js';
+import opinionRoutes from './routes/opinionRoutes.js';
 
 dotenv.config();
 
@@ -73,6 +74,7 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/predefined', predefinedRoutes);
 app.use('/api/draw', drawRoutes);
 app.use('/api/payment-methods', paymentMethodRoutes);
+app.use('/api/opinions', opinionRoutes);
 
 // ── Health check ───────────────────────────────────────────
 app.get('/api/health', (_, res) => res.json({ status: 'ok', service: 'CGA Reunion API' }));
