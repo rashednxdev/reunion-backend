@@ -3,6 +3,7 @@ import Division from '../models/Division.js';
 import District from '../models/District.js';
 import Upazila from '../models/Upazila.js';
 import OfficeName from '../models/OfficeName.js';
+import Designation from '../models/Designation.js';
 
 // --- Office Types ---
 export const getOfficeTypes = async (req, res) => {
@@ -172,5 +173,34 @@ export const deleteOfficeName = async (req, res) => {
     res.json({ success: true, message: 'Deleted successfully' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// --- Designations ---
+export const getDesignations = async (req, res) => {
+  try {
+    const data = await Designation.find().sort({ title: 1 });
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const createDesignation = async (req, res) => {
+  try {
+    const { title, short } = req.body;
+    const newData = await Designation.create({ title, short });
+    res.status(201).json({ success: true, data: newData });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const deleteDesignation = async (req, res) => {
+  try {
+    await Designation.findByIdAndDelete(req.params.id);
+    res.status(200).json({ success: true, message: 'Deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
   }
 };

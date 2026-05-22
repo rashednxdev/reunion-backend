@@ -450,3 +450,87 @@ export const syncUserOffices = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
+// GET /api/registrations/public-list (public - approved attendees only)
+export const getPersonnelList = async (req, res) => {
+  try {
+    const list = await Registration.find(
+      { status: 'approved' },
+      { fullName: 1, designation: 1, officeType: 1, officeName: 1, division: 1, district: 1, upazila: 1, mobile: 1 }
+    ).sort({ fullName: 1 });
+    res.json({ success: true, data: list });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// POST /api/registrations/verify-personnel
+export const verifyPersonnel = async (req, res) => {
+  try {
+    const { mobile, email } = req.body;
+    if (!mobile || !email) {
+      return res.status(400).json({ success: false, message: 'Mobile and email are required.' });
+    }
+
+    const queryMobile = mobile.trim();
+    const queryEmail = email.trim().toLowerCase();
+
+    const reg = await Registration.findOne({
+      status: 'approved',
+      mobile: queryMobile,
+      email: queryEmail
+    });
+
+    if (!reg) {
+      return res.status(404).json({
+        success: false,
+        message: 'No approved registration found matching these credentials.'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Verified successfully.',
+      hasDesignation: !!reg.designation,
+      designation: reg.designation || ''
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// POST /api/registrations/update-personnel-designation
+export const updatePersonnelDesignation = async (req, res) => {
+  try {
+    const { mobile, email, designation } = req.body;
+    if (!mobile || !email || !designation) {
+      return res.status(400).json({ success: false, message: 'Mobile, email, and designation are required.' });
+    }
+
+    const queryMobile = mobile.trim();
+    const queryEmail = email.trim().toLowerCase();
+
+    const reg = await Registration.findOneAndUpdate(
+      { status: 'approved', mobile: queryMobile, email: queryEmail },
+      { designation: designation.trim() },
+      { new: true }
+    );
+
+    if (!reg) {
+      return res.status(404).json({
+        success: false,
+        message: 'Registration not found or not approved.'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Designation updated successfully.',
+      designation: reg.designation
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+

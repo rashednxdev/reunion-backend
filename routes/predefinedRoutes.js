@@ -15,6 +15,9 @@ import {
   getOfficeNames,
   createOfficeName,
   deleteOfficeName,
+  getDesignations,
+  createDesignation,
+  deleteDesignation,
 } from '../controllers/predefinedController.js';
 import { adminAuth } from '../middleware/adminAuth.js';
 
@@ -54,5 +57,12 @@ router.route('/office-names')
   .post(adminAuth, createOfficeName);
 router.route('/office-names/:id')
   .delete(adminAuth, deleteOfficeName);
+
+// Designations
+router.route('/designations')
+  .get(getDesignations)
+  .post(adminAuth, createDesignation);
+router.route('/designations/:id')
+  .delete(adminAuth, deleteDesignation);
 
 export default router;
