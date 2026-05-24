@@ -15,6 +15,7 @@ import {
   getOfficeNames,
   createOfficeName,
   deleteOfficeName,
+  updateOfficeName,
   getDesignations,
   createDesignation,
   deleteDesignation,
@@ -56,6 +57,7 @@ router.route('/office-names')
   .get(getOfficeNames)
   .post(adminAuth, createOfficeName);
 router.route('/office-names/:id')
+  .put(adminAuth, updateOfficeName)
   .delete(adminAuth, deleteOfficeName);
 
 // Designations

@@ -176,6 +176,33 @@ export const deleteOfficeName = async (req, res) => {
   }
 };
 
+export const updateOfficeName = async (req, res) => {
+  try {
+    const { title, short, divisionId, districtId, upazilaId } = req.body;
+    const doc = await OfficeName.findByIdAndUpdate(
+      req.params.id,
+      {
+        title,
+        short: short ? short.trim() : undefined,
+        divisionId: divisionId || undefined,
+        districtId: districtId || undefined,
+        upazilaId: upazilaId || undefined
+      },
+      { new: true }
+    )
+      .populate('divisionId', 'title short')
+      .populate('districtId', 'title short')
+      .populate('upazilaId', 'title short');
+
+    if (!doc) {
+      return res.status(404).json({ success: false, message: 'Office not found' });
+    }
+    res.status(200).json({ success: true, data: doc });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 // --- Designations ---
 export const getDesignations = async (req, res) => {
   try {
