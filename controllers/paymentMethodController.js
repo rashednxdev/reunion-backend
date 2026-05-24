@@ -13,11 +13,36 @@ export const getPaymentMethods = async (req, res) => {
 // Create a new payment method (admin auth)
 export const createPaymentMethod = async (req, res) => {
   try {
-    const { name, number, instructions, isActive } = req.body;
-    if (!name || !number) {
-      return res.status(400).json({ success: false, message: 'Name and number are required' });
+    const { name, type, number, bankName, accountName, accountNumber, routingNumber, instructions, isActive } = req.body;
+    if (!name) {
+      return res.status(400).json({ success: false, message: 'Payment method name is required' });
     }
-    const newData = await PaymentMethod.create({ name, number, instructions, isActive });
+
+    const payType = type || 'Mobile Banking';
+
+    if (payType === 'Mobile Banking') {
+      if (!number) {
+        return res.status(400).json({ success: false, message: 'Account number is required for Mobile Banking' });
+      }
+    } else if (payType === 'Bank Account') {
+      if (!bankName || !accountName || !accountNumber || !routingNumber) {
+        return res.status(400).json({ success: false, message: 'Bank Name, Account Name, A/C Number, and Routing Number are required for Bank Accounts' });
+      }
+    } else {
+      return res.status(400).json({ success: false, message: 'Invalid payment method type' });
+    }
+
+    const newData = await PaymentMethod.create({
+      name,
+      type: payType,
+      number: payType === 'Mobile Banking' ? number : '',
+      bankName: payType === 'Bank Account' ? bankName : '',
+      accountName: payType === 'Bank Account' ? accountName : '',
+      accountNumber: payType === 'Bank Account' ? accountNumber : '',
+      routingNumber: payType === 'Bank Account' ? routingNumber : '',
+      instructions,
+      isActive
+    });
     res.status(201).json({ success: true, data: newData });
   } catch (error) {
     if (error.code === 11000) {
@@ -30,14 +55,42 @@ export const createPaymentMethod = async (req, res) => {
 // Update an existing payment method (admin auth)
 export const updatePaymentMethod = async (req, res) => {
   try {
-    const { name, number, instructions, isActive } = req.body;
+    const { name, type, number, bankName, accountName, accountNumber, routingNumber, instructions, isActive } = req.body;
     const paymentMethod = await PaymentMethod.findById(req.params.id);
     if (!paymentMethod) {
       return res.status(404).json({ success: false, message: 'Payment method not found' });
     }
 
+    const payType = type !== undefined ? type : paymentMethod.type;
+
+    if (payType === 'Mobile Banking') {
+      const numVal = number !== undefined ? number : paymentMethod.number;
+      if (!numVal) {
+        return res.status(400).json({ success: false, message: 'Account number is required for Mobile Banking' });
+      }
+      paymentMethod.number = numVal;
+      paymentMethod.bankName = '';
+      paymentMethod.accountName = '';
+      paymentMethod.accountNumber = '';
+      paymentMethod.routingNumber = '';
+    } else if (payType === 'Bank Account') {
+      const bName = bankName !== undefined ? bankName : paymentMethod.bankName;
+      const aName = accountName !== undefined ? accountName : paymentMethod.accountName;
+      const aNum = accountNumber !== undefined ? accountNumber : paymentMethod.accountNumber;
+      const rNum = routingNumber !== undefined ? routingNumber : paymentMethod.routingNumber;
+
+      if (!bName || !aName || !aNum || !rNum) {
+        return res.status(400).json({ success: false, message: 'Bank Name, Account Name, A/C Number, and Routing Number are required for Bank Accounts' });
+      }
+      paymentMethod.number = '';
+      paymentMethod.bankName = bName;
+      paymentMethod.accountName = aName;
+      paymentMethod.accountNumber = aNum;
+      paymentMethod.routingNumber = rNum;
+    }
+
     if (name) paymentMethod.name = name;
-    if (number) paymentMethod.number = number;
+    if (type !== undefined) paymentMethod.type = type;
     if (instructions !== undefined) paymentMethod.instructions = instructions;
     if (isActive !== undefined) paymentMethod.isActive = isActive;
 

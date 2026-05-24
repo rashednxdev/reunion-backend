@@ -12,6 +12,7 @@ import drawRoutes from './routes/drawRoutes.js';
 import paymentMethodRoutes from './routes/paymentMethodRoutes.js';
 import opinionRoutes from './routes/opinionRoutes.js';
 import singleChanceRoutes from './routes/singleChanceRoutes.js';
+import contactRoutes from './routes/contactRoutes.js';
 
 dotenv.config();
 
@@ -77,6 +78,7 @@ app.use('/api/draw', drawRoutes);
 app.use('/api/payment-methods', paymentMethodRoutes);
 app.use('/api/opinions', opinionRoutes);
 app.use('/api/single-chance', singleChanceRoutes);
+app.use('/api/contacts', contactRoutes);
 
 // ── Health check ───────────────────────────────────────────
 app.get('/api/health', (_, res) => res.json({ status: 'ok', service: 'CGA Reunion API' }));
