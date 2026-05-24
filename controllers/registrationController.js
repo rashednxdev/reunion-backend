@@ -1,14 +1,24 @@
 import Registration from '../models/Registration.js';
 import UserOffice from '../models/UserOffice.js';
 
-// Generate ticket ID: CGA2018-XXXXXX (6 char alphanumeric)
-const generateTicketId = () => {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let id = 'CGA2018-';
-  for (let i = 0; i < 6; i++) {
-    id += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return id;
+// Generate sequential ticket ID at registration time
+// Male starts from 100: "M L-100", "M M-101"
+// Female starts from 600: "F XL-600", "F M-601"
+const generateSequentialTicketId = async (gender, tshirtSize) => {
+  const isFemale = (gender || '').toLowerCase() === 'female';
+  const genderLetter = isFemale ? 'F' : 'M';
+  const size = (tshirtSize || 'M').toUpperCase();
+  const startFrom = isFemale ? 600 : 100;
+
+  // Find highest existing serial for this gender
+  const highest = await Registration.findOne({
+    gender: { $regex: new RegExp(`^${isFemale ? 'female' : 'male'}$`, 'i') },
+    serialNumber: { $exists: true, $ne: null }
+  }).sort({ serialNumber: -1 });
+
+  const serial = highest ? highest.serialNumber + 1 : startFrom;
+  const ticketId = `${genderLetter} ${size}-${serial}`;
+  return { serial, ticketId };
 };
 
 // POST /api/registrations
@@ -35,14 +45,8 @@ export const createRegistration = async (req, res) => {
       calculatedFee += members.length * 600;
     }
 
-    // Generate unique ticket ID
-    let ticketId;
-    let isUnique = false;
-    while (!isUnique) {
-      ticketId = generateTicketId();
-      const existing = await Registration.findOne({ ticketId });
-      if (!existing) isUnique = true;
-    }
+    // Auto-generate sequential ticket ID based on gender & t-shirt size
+    const { serial, ticketId } = await generateSequentialTicketId(gender, tshirtSize);
 
     // Compute unified office name
     let computedOfficeName = officeType || '';
@@ -60,6 +64,7 @@ export const createRegistration = async (req, res) => {
 
     const registration = await Registration.create({
       ticketId,
+      serialNumber: serial,
       fullName: finalName,
       employeeId,
       designation,
@@ -119,6 +124,23 @@ export const checkRegistration = async (req, res) => {
     }
 
     res.json({ success: true, isRegistered: true, data: registration });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// GET /api/registrations/ticket/:ticketId
+export const getRegistrationByTicketId = async (req, res) => {
+  try {
+    const { ticketId } = req.params;
+    if (!ticketId) return res.status(400).json({ success: false, message: 'Ticket ID is required' });
+
+    const registration = await Registration.findOne({ ticketId });
+    if (!registration) {
+      return res.status(404).json({ success: false, message: 'Ticket not found' });
+    }
+
+    res.json({ success: true, data: registration });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -317,6 +339,8 @@ export const getPublicStats = async (req, res) => {
 
 // POST /api/registrations/assign-serials  (admin only)
 // Bulk-assigns sequential serial numbers to ALL approved registrations that don't have one yet
+// Male serial starts from 100, Female from 600
+// ticketId format: "M L-100", "F XL-600"  (GenderLetter Space TshirtSize-Serial)
 export const assignSerialNumbers = async (req, res) => {
   try {
     // Get all approved registrations without a serial number, oldest first
@@ -329,16 +353,16 @@ export const assignSerialNumbers = async (req, res) => {
       return res.json({ success: true, message: 'All approved registrations already have serial numbers.', assigned: 0 });
     }
 
-    // Find the current highest serial number for Male
+    // Find the current highest serial number for Male (starts at 100)
     const highestMale = await Registration.findOne({
-      gender: 'Male',
+      gender: { $in: ['Male', 'male'] },
       serialNumber: { $exists: true }
     }).sort({ serialNumber: -1 });
     let nextMaleSerial = highestMale ? highestMale.serialNumber + 1 : 100;
 
-    // Find the current highest serial number for Female
+    // Find the current highest serial number for Female (starts at 600)
     const highestFemale = await Registration.findOne({
-      gender: 'Female',
+      gender: { $in: ['Female', 'female'] },
       serialNumber: { $exists: true }
     }).sort({ serialNumber: -1 });
     let nextFemaleSerial = highestFemale ? highestFemale.serialNumber + 1 : 600;
@@ -348,26 +372,21 @@ export const assignSerialNumbers = async (req, res) => {
 
     for (const reg of unassigned) {
       const isFemale = (reg.gender || '').toLowerCase() === 'female';
-      let serial;
-      if (isFemale) {
-        serial = nextFemaleSerial++;
-      } else {
-        serial = nextMaleSerial++;
-      }
+      const serial = isFemale ? nextFemaleSerial++ : nextMaleSerial++;
 
-      // Generate ticketId based on: first letter of gender + tshirt size + '-' + serial
-      const genderLetter = (reg.gender || 'Male').charAt(0).toUpperCase();
+      // Format: "M L-100"  or  "F XL-600"
+      const genderLetter = isFemale ? 'F' : 'M';
       const tshirtSize = (reg.tshirtSize || 'M').toUpperCase();
-      const ticketId = `${genderLetter}${tshirtSize}-${serial}`;
+      const ticketId = `${genderLetter} ${tshirtSize}-${serial}`;
 
       updates.push({
         updateOne: {
           filter: { _id: reg._id },
-          update: { 
-            $set: { 
+          update: {
+            $set: {
               serialNumber: serial,
               ticketId: ticketId
-            } 
+            }
           }
         }
       });
@@ -378,7 +397,7 @@ export const assignSerialNumbers = async (req, res) => {
 
     res.json({
       success: true,
-      message: `Successfully assigned ${assignedCount} serial numbers and formatted tickets.`,
+      message: `Successfully assigned ${assignedCount} serial numbers. Male from 100, Female from 600.`,
       assigned: assignedCount
     });
   } catch (err) {

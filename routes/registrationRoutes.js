@@ -1,11 +1,12 @@
 import express from 'express';
-import { createRegistration, getAllRegistrations, getStats, getPublicStats, exportCSV, checkRegistration, updateRegistrationStatus, assignSerialNumbers, getDrawCandidates, syncUserOffices, getPersonnelList, verifyPersonnel, updatePersonnelDesignation } from '../controllers/registrationController.js';
+import { createRegistration, getAllRegistrations, getStats, getPublicStats, exportCSV, checkRegistration, updateRegistrationStatus, assignSerialNumbers, getDrawCandidates, syncUserOffices, getPersonnelList, verifyPersonnel, updatePersonnelDesignation, getRegistrationByTicketId } from '../controllers/registrationController.js';
 import { adminAuth } from '../middleware/adminAuth.js';
 
 const router = express.Router();
 
 router.post('/', createRegistration);                  // Public
 router.get('/check/:mobile', checkRegistration);       // Public
+router.get('/ticket/:ticketId', getRegistrationByTicketId); // Public
 router.get('/public-stats', getPublicStats);           // Public
 router.get('/draw-candidates', getDrawCandidates);     // Public
 router.get('/public-list', getPersonnelList);          // Public
