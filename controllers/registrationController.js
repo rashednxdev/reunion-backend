@@ -27,7 +27,7 @@ export const createRegistration = async (req, res) => {
     const { name, fullName, phone, mobile, employeeId, designation, bloodGroup, gender, officeType, division, district, upazila, email, message, members = [], paymentMethod, transactionId, amountPaid, tshirtSize, officeName } = req.body;
 
     const finalName = fullName || name;
-    const finalMobile = mobile || phone;
+    const finalMobile = (mobile || phone || '').toString().trim().replace(/\s+/g, '');
 
     if (!finalName || !finalMobile) {
       return res.status(400).json({ success: false, message: 'Full name and mobile number are required' });
@@ -551,5 +551,125 @@ export const updatePersonnelDesignation = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
+// PUT /api/registrations/:id/resubmit
+export const resubmitRegistration = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, fullName, phone, mobile, employeeId, designation, bloodGroup, gender, officeType, division, district, upazila, email, message, members = [], paymentMethod, transactionId, amountPaid, tshirtSize, officeName } = req.body;
+
+    const registration = await Registration.findById(id);
+    if (!registration) {
+      return res.status(404).json({ success: false, message: 'Registration not found' });
+    }
+
+    if (registration.status !== 'rejected') {
+      return res.status(400).json({ success: false, message: 'Only rejected registrations can be resubmitted' });
+    }
+
+    const finalName = fullName || name;
+    const finalMobile = (mobile || phone || '').toString().trim().replace(/\s+/g, '');
+
+    if (!finalName || !finalMobile) {
+      return res.status(400).json({ success: false, message: 'Full name and mobile number are required' });
+    }
+
+    // Check if mobile already exists for another registration
+    const cleanRegMobile = (registration.mobile || '').toString().trim().replace(/\s+/g, '');
+    if (finalMobile !== cleanRegMobile) {
+      const existingMobile = await Registration.findOne({ mobile: finalMobile });
+      if (existingMobile) {
+        return res.status(400).json({ success: false, message: 'This mobile number is already registered' });
+      }
+    }
+
+    // Calculate Fee
+    let calculatedFee = 1200; // Base fee
+    if (Array.isArray(members)) {
+      calculatedFee += members.length * 600;
+    }
+
+    // Generate ticket ID if gender or tshirt size changed
+    let serial = registration.serialNumber;
+    let ticketId = registration.ticketId;
+    if (
+      (registration.gender || '').toLowerCase() !== (gender || '').toLowerCase() ||
+      (registration.tshirtSize || '').toLowerCase() !== (tshirtSize || '').toLowerCase() ||
+      !serial ||
+      !ticketId
+    ) {
+      const newTicket = await generateSequentialTicketId(gender, tshirtSize);
+      serial = newTicket.serial;
+      ticketId = newTicket.ticketId;
+    }
+
+    // Compute unified office name
+    let computedOfficeName = officeType || '';
+    if (officeType === 'Office of the Controller General of Accounts' || officeType === 'CGA') {
+      computedOfficeName = 'CGA';
+    } else if (officeType === 'Chief Accounts and Finance Office' || officeType === 'CAFO') {
+      computedOfficeName = officeName || district || 'CAFO';
+    } else if (officeType === 'Divisional Controller General of Accounts' || officeType === 'DCA') {
+      computedOfficeName = `DCA - ${division || ''}`;
+    } else if (officeType === 'District Accounts and Finance Office' || officeType === 'DAFO') {
+      computedOfficeName = `DAFO - ${district || ''}`;
+    } else if (officeType === 'Upazila Accounts Office' || officeType === 'UAO') {
+      computedOfficeName = `UAO - ${upazila || ''}`;
+    }
+
+    // Update registration details
+    registration.fullName = finalName;
+    registration.employeeId = employeeId;
+    registration.designation = designation;
+    registration.bloodGroup = bloodGroup;
+    registration.gender = gender;
+    registration.officeType = officeType;
+    registration.officeName = computedOfficeName;
+    registration.division = division;
+    registration.district = district;
+    registration.upazila = upazila;
+    registration.mobile = finalMobile;
+    registration.email = email;
+    registration.tshirtSize = tshirtSize;
+    registration.message = message;
+    registration.members = members;
+    registration.totalFee = calculatedFee;
+    registration.paymentMethod = paymentMethod;
+    registration.transactionId = transactionId;
+    registration.amountPaid = Number(amountPaid) || calculatedFee;
+    
+    // Reset status to pending and clear rejection reason
+    registration.status = 'pending';
+    registration.rejectionReason = undefined;
+    registration.serialNumber = serial;
+    registration.ticketId = ticketId;
+
+    await registration.save();
+
+    // Update UserOffice tracking entry
+    try {
+      await UserOffice.findOneAndUpdate(
+        { registrationId: registration._id },
+        {
+          fullName: finalName,
+          mobile: finalMobile,
+          officeType,
+          officeName: computedOfficeName,
+          division: division || 'N/A',
+          district: district || 'N/A',
+          upazila: upazila || 'N/A',
+        },
+        { upsert: true, new: true }
+      );
+    } catch (err) {
+      console.error('Failed to update UserOffice entry during resubmission:', err);
+    }
+
+    res.json({ success: true, message: 'Registration resubmitted successfully', data: registration, registration });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 
 
