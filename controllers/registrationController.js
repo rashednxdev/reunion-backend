@@ -1,5 +1,6 @@
 import Registration from '../models/Registration.js';
 import UserOffice from '../models/UserOffice.js';
+import { sendApprovalConfirmationEmail } from '../services/emailService.js';
 
 // Generate sequential ticket ID at registration time
 // Male starts from 100: "M L-100", "M M-101"
@@ -159,6 +160,8 @@ export const updateRegistrationStatus = async (req, res) => {
     const registration = await Registration.findById(id);
     if (!registration) return res.status(404).json({ success: false, message: 'Registration not found' });
 
+    const previousStatus = registration.status;
+
     registration.status = status;
     if (status === 'rejected') {
       registration.rejectionReason = rejectionReason;
@@ -167,7 +170,21 @@ export const updateRegistrationStatus = async (req, res) => {
     }
 
     await registration.save();
-    res.json({ success: true, data: registration });
+
+    let emailResult = { sent: false };
+    if (status === 'approved' && previousStatus !== 'approved') {
+      try {
+        emailResult = await sendApprovalConfirmationEmail(registration);
+      } catch (emailErr) {
+        console.error('[email] Failed to send approval confirmation:', emailErr);
+        emailResult = {
+          sent: false,
+          reason: emailErr.message || 'Failed to send confirmation email.',
+        };
+      }
+    }
+
+    res.json({ success: true, data: registration, email: emailResult });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
