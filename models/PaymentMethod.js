@@ -5,7 +5,7 @@ const paymentMethodSchema = new mongoose.Schema(
     name: { type: String, required: true, unique: true },
     type: { 
       type: String, 
-      enum: ['Mobile Banking', 'Bank Account'], 
+      enum: ['Mobile Banking', 'Bank Account', 'Cash Payment'], 
       default: 'Mobile Banking' 
     },
     number: { type: String, default: '' }, // For wallet number in Mobile Banking

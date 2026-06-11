@@ -28,7 +28,7 @@ export const createPaymentMethod = async (req, res) => {
       if (!bankName || !accountName || !accountNumber || !routingNumber) {
         return res.status(400).json({ success: false, message: 'Bank Name, Account Name, A/C Number, and Routing Number are required for Bank Accounts' });
       }
-    } else {
+    } else if (payType !== 'Cash Payment') {
       return res.status(400).json({ success: false, message: 'Invalid payment method type' });
     }
 
@@ -40,7 +40,7 @@ export const createPaymentMethod = async (req, res) => {
       accountName: payType === 'Bank Account' ? accountName : '',
       accountNumber: payType === 'Bank Account' ? accountNumber : '',
       routingNumber: payType === 'Bank Account' ? routingNumber : '',
-      instructions,
+      instructions: instructions || '',
       isActive
     });
     res.status(201).json({ success: true, data: newData });
@@ -87,6 +87,12 @@ export const updatePaymentMethod = async (req, res) => {
       paymentMethod.accountName = aName;
       paymentMethod.accountNumber = aNum;
       paymentMethod.routingNumber = rNum;
+    } else if (payType === 'Cash Payment') {
+      paymentMethod.number = '';
+      paymentMethod.bankName = '';
+      paymentMethod.accountName = '';
+      paymentMethod.accountNumber = '';
+      paymentMethod.routingNumber = '';
     }
 
     if (name) paymentMethod.name = name;

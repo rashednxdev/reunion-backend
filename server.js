@@ -14,6 +14,7 @@ import opinionRoutes from './routes/opinionRoutes.js';
 import singleChanceRoutes from './routes/singleChanceRoutes.js';
 import contactRoutes from './routes/contactRoutes.js';
 import accountingRoutes from './routes/accountingRoutes.js';
+import { ensureDefaultCashPaymentMethod } from './utils/paymentMethod.js';
 
 dotenv.config();
 
@@ -97,8 +98,13 @@ app.use((err, _req, res, _next) => {
 // ── Database + Server ─────────────────────────────────────
 mongoose
   .connect(process.env.MONGO_URI)
-  .then(() => {
+  .then(async () => {
     console.log('✅ MongoDB Atlas connected');
+    try {
+      await ensureDefaultCashPaymentMethod();
+    } catch (err) {
+      console.warn('⚠️ Could not ensure default Cash Payment method:', err.message);
+    }
     app.listen(PORT, () => {
       console.log(`🚀 CGA Reunion API running on http://localhost:${PORT}`);
     });

@@ -1,6 +1,10 @@
 import Registration from '../models/Registration.js';
 import UserOffice from '../models/UserOffice.js';
 import { sendApprovalConfirmationEmail } from '../services/emailService.js';
+import {
+  resolveRegistrationPayment,
+  isCashPaymentMethodName,
+} from '../utils/paymentMethod.js';
 
 // Generate sequential ticket ID at registration time
 // Male starts from 100: "M L-100", "M M-101"
@@ -40,11 +44,11 @@ export const createRegistration = async (req, res) => {
       return res.status(400).json({ success: false, message: 'This mobile number is already registered' });
     }
 
-    // Calculate Fee
-    let calculatedFee = 1200; // Base fee
-    if (Array.isArray(members)) {
-      calculatedFee += members.length * 600;
-    }
+    const { calculatedFee, amountPaid: resolvedAmountPaid, isCash } = await resolveRegistrationPayment(
+      paymentMethod,
+      members,
+      amountPaid
+    );
 
     // Auto-generate sequential ticket ID based on gender & t-shirt size
     const { serial, ticketId } = await generateSequentialTicketId(gender, tshirtSize);
@@ -83,8 +87,8 @@ export const createRegistration = async (req, res) => {
       members,
       totalFee: calculatedFee,
       paymentMethod,
-      transactionId,
-      amountPaid: Number(amountPaid) || calculatedFee,
+      transactionId: isCash ? '' : (transactionId || ''),
+      amountPaid: resolvedAmountPaid,
       status: 'pending' // default
     });
 
@@ -167,6 +171,16 @@ export const updateRegistrationStatus = async (req, res) => {
       registration.rejectionReason = rejectionReason;
     } else {
       registration.rejectionReason = undefined; // clear reason if approved/pending
+    }
+
+    if (status === 'approved' && previousStatus !== 'approved') {
+      const isCash = await isCashPaymentMethodName(registration.paymentMethod);
+      if (isCash) {
+        registration.amountPaid = registration.totalFee;
+        if (!registration.transactionId) {
+          registration.transactionId = 'CASH';
+        }
+      }
     }
 
     await registration.save();
@@ -600,11 +614,11 @@ export const resubmitRegistration = async (req, res) => {
       }
     }
 
-    // Calculate Fee
-    let calculatedFee = 1200; // Base fee
-    if (Array.isArray(members)) {
-      calculatedFee += members.length * 600;
-    }
+    const { calculatedFee, amountPaid: resolvedAmountPaid, isCash } = await resolveRegistrationPayment(
+      paymentMethod,
+      members,
+      amountPaid
+    );
 
     // Generate ticket ID if gender or tshirt size changed
     let serial = registration.serialNumber;
@@ -652,8 +666,8 @@ export const resubmitRegistration = async (req, res) => {
     registration.members = members;
     registration.totalFee = calculatedFee;
     registration.paymentMethod = paymentMethod;
-    registration.transactionId = transactionId;
-    registration.amountPaid = Number(amountPaid) || calculatedFee;
+    registration.transactionId = isCash ? '' : (transactionId || '');
+    registration.amountPaid = resolvedAmountPaid;
     
     // Reset status to pending and clear rejection reason
     registration.status = 'pending';
