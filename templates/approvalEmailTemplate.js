@@ -61,8 +61,8 @@ export function buildApprovalEmailHtml(registration, { ticketUrl, registerUrl })
                 Your registration has been approved. Your reunion ticket is ready below.
               </p>
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#ffffff;border:1px solid #bae6fd;border-radius:12px;text-align:left;">
-                <tr><td style="padding:10px 14px;font-size:13px;color:#1d4ed8;font-weight:700;">📅 Saturday, 11 July 2026</td></tr>
-                <tr><td style="padding:0 14px 10px;font-size:13px;color:#dc2626;font-weight:700;">📍 Bangladesh Shilpakala Academy, Dhaka</td></tr>
+                <tr><td style="padding:10px 14px;font-size:13px;color:#1d4ed8;font-weight:700;">📅 Saturday, 22 August 2026</td></tr>
+                <tr><td style="padding:0 14px 10px;font-size:13px;color:#dc2626;font-weight:700;">📍 BGB Banquet Hall, Shimanto Shambhar, Dhanmondi</td></tr>
                 <tr><td style="padding:0 14px 12px;font-size:13px;color:#15803d;font-weight:700;">⏰ 11:00 AM – 7:00 PM</td></tr>
               </table>
             </td>
@@ -169,8 +169,8 @@ export function buildApprovalEmailText(registration, { ticketUrl, registerUrl })
 
 Your registration for CGA Batch 2018 Grand Reunion 2026 has been APPROVED.
 
-Event: Saturday, 11 July 2026
-Venue: Bangladesh Shilpakala Academy, Dhaka
+Event: Saturday, 22 August 2026
+Venue: BGB Banquet Hall, Shimanto Shambhar, 4th Floor, Road #2, Dhanmondi 1205, Dhaka, Bangladesh
 Time: 11:00 AM – 7:00 PM
 
 Ticket Number: ${registration.ticketId}

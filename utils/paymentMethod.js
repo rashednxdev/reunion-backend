@@ -2,9 +2,12 @@ import PaymentMethod from '../models/PaymentMethod.js';
 
 export const CASH_PAYMENT_TYPE = 'Cash Payment';
 
+const BASE_REGISTRATION_FEE = 1400;
+const FAMILY_MEMBER_FEE = 900;
+
 export function calculateRegistrationFee(members = []) {
   const count = Array.isArray(members) ? members.length : 0;
-  return 1200 + count * 600;
+  return BASE_REGISTRATION_FEE + count * FAMILY_MEMBER_FEE;
 }
 
 export async function getPaymentMethodByName(name) {

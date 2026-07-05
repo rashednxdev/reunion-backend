@@ -26,7 +26,7 @@ export const generateAnnouncement = async (req, res) => {
         messages: [
           {
             role: 'user',
-            content: `Reunion: CGA Batch 2018, Office of the Controller General of Accounts. Venue: Bangladesh Shilpakala Academy, Segunbagicha, Dhaka. Date: Saturday 11 July 2026, 11 AM–7 PM.\n\nWrite an announcement about: ${prompt}`,
+            content: `Reunion: CGA Batch 2018, Office of the Controller General of Accounts. Venue: BGB Banquet Hall, Shimanto Shambhar, 4th Floor, Road #2, Dhanmondi 1205, Dhaka, Bangladesh. Date: Saturday 22 August 2026, 11 AM–7 PM.\n\nWrite an announcement about: ${prompt}`,
           },
         ],
       }),
