@@ -120,10 +120,17 @@ export const createRegistration = async (req, res) => {
 // GET /api/registrations/check/:mobile
 export const checkRegistration = async (req, res) => {
   try {
-    const { mobile } = req.params;
+    const raw = req.params.mobile || '';
+    const mobile = raw.toString().trim().replace(/\s+/g, '');
     if (!mobile) return res.status(400).json({ success: false, message: 'Mobile number is required' });
 
-    const registration = await Registration.findOne({ mobile });
+    // Match stored number with or without spaces
+    const registration = await Registration.findOne({
+      $or: [
+        { mobile },
+        { mobile: raw.toString().trim() },
+      ],
+    });
     if (!registration) {
       return res.json({ success: true, isRegistered: false });
     }
@@ -207,26 +214,43 @@ export const updateRegistrationStatus = async (req, res) => {
 // GET /api/registrations  (admin only)
 export const getAllRegistrations = async (req, res) => {
   try {
-    const { search, status, page = 1, limit = 50 } = req.query;
+    const { search, status, page = 1, limit = 5000 } = req.query;
 
     const filter = {};
     if (status && status !== 'all') filter.status = status;
     if (search) {
+      const q = search.toString().trim();
+      const digits = q.replace(/\D/g, '');
       filter.$or = [
-        { fullName: { $regex: search, $options: 'i' } },
-        { employeeId: { $regex: search, $options: 'i' } },
-        { district: { $regex: search, $options: 'i' } },
-        { mobile: { $regex: search, $options: 'i' } },
+        { fullName: { $regex: q, $options: 'i' } },
+        { employeeId: { $regex: q, $options: 'i' } },
+        { district: { $regex: q, $options: 'i' } },
+        { officeName: { $regex: q, $options: 'i' } },
+        { ticketId: { $regex: q, $options: 'i' } },
+        { transactionId: { $regex: q, $options: 'i' } },
+        { mobile: { $regex: q, $options: 'i' } },
       ];
+      if (digits) {
+        filter.$or.push({ mobile: { $regex: digits } });
+      }
     }
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const parsedLimit = Math.min(Math.max(parseInt(limit, 10) || 5000, 1), 10000);
+    const parsedPage = Math.max(parseInt(page, 10) || 1, 1);
+    const skip = (parsedPage - 1) * parsedLimit;
+
     const [registrations, total] = await Promise.all([
-      Registration.find(filter).sort({ createdAt: -1 }).skip(skip).limit(parseInt(limit)),
+      Registration.find(filter).sort({ createdAt: -1 }).skip(skip).limit(parsedLimit),
       Registration.countDocuments(filter),
     ]);
 
-    res.json({ success: true, data: registrations, total, page: parseInt(page) });
+    res.json({
+      success: true,
+      data: registrations,
+      total,
+      page: parsedPage,
+      limit: parsedLimit,
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -594,9 +618,14 @@ export const resubmitRegistration = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Registration not found' });
     }
 
-    if (registration.status !== 'rejected') {
-      return res.status(400).json({ success: false, message: 'Only rejected registrations can be resubmitted' });
+    if (!['pending', 'rejected'].includes(registration.status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Approved registrations cannot be edited. Please contact the organiser if changes are needed.',
+      });
     }
+
+    const wasRejected = registration.status === 'rejected';
 
     const finalName = fullName || name;
     const finalMobile = (mobile || phone || '').toString().trim().replace(/\s+/g, '');
@@ -668,12 +697,14 @@ export const resubmitRegistration = async (req, res) => {
     registration.paymentMethod = paymentMethod;
     registration.transactionId = isCash ? '' : (transactionId || '');
     registration.amountPaid = resolvedAmountPaid;
-    
-    // Reset status to pending and clear rejection reason
-    registration.status = 'pending';
-    registration.rejectionReason = undefined;
     registration.serialNumber = serial;
     registration.ticketId = ticketId;
+
+    // Rejected → pending again; pending stays pending until admin approves
+    if (wasRejected) {
+      registration.status = 'pending';
+      registration.rejectionReason = undefined;
+    }
 
     await registration.save();
 
@@ -696,7 +727,12 @@ export const resubmitRegistration = async (req, res) => {
       console.error('Failed to update UserOffice entry during resubmission:', err);
     }
 
-    res.json({ success: true, message: 'Registration resubmitted successfully', data: registration, registration });
+    res.json({
+      success: true,
+      message: wasRejected ? 'Registration resubmitted successfully' : 'Registration updated successfully',
+      data: registration,
+      registration,
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
